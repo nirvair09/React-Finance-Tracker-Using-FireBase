@@ -6,7 +6,7 @@ import { auth } from "../../firebase";
 import userSvg from "../../assets/user.svg";
 
 function Header(){
-    const [user]=useAuthStore(auth);
+    const [user]=useAuthState(auth);
     const navigate=useNavigate();
 
     function logout(){
@@ -19,7 +19,7 @@ function Header(){
         if(!user){
             navigate("/");
         }else{
-            navifate("/dashboard");
+            navigate("/dashboard");
         }
     },[user,navigate]);
     
