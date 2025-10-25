@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { Card, Row } from "antd";
 import { Line, Pie } from "@ant-design/charts";
 import moment from "moment";
@@ -10,7 +10,14 @@ import Cards from "./Cards";
 import NoTransactions from "./NoTransactions";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth, db } from "../firebase";
-import { addDoc, collection, getDocs, query } from "firebase/firestore";
+import {
+  addDoc,
+  collection,
+  getDocs,
+  query,
+  deleteDoc,
+  doc,
+} from "firebase/firestore";
 import Loader from "./Loader";
 import { toast } from "react-toastify";
 import { useNavigate } from "react-router-dom";
@@ -18,30 +25,6 @@ import { unparse } from "papaparse";
 
 const Dashboard = () => {
   const [user] = useAuthState(auth);
-
-  // const sampleTransactions = [
-  // {
-  //   name: "Pay day",
-  //   type: "income",
-  //   date: "2023-01-15",
-  //   amount: 2000,
-  //   tag: "salary",
-  // },
-  // {
-  //   name: "Dinner",
-  //   type: "expense",
-  //   date: "2023-01-20",
-  //   amount: 500,
-  //   tag: "food",
-  // },
-  // {
-  //   name: "Books",
-  //   type: "expense",
-  //   date: "2023-01-25",
-  //   amount: 300,
-  //   tag: "education",
-  // },
-  // ];
   const [isExpenseModalVisible, setIsExpenseModalVisible] = useState(false);
   const [isIncomeModalVisible, setIsIncomeModalVisible] = useState(false);
   const [transactions, setTransactions] = useState([]);
@@ -52,6 +35,104 @@ const Dashboard = () => {
 
   const navigate = useNavigate();
 
+  // ---------------------- Transaction Logic ----------------------
+
+  const onFinish = (values, type) => {
+    const newTransaction = {
+      type,
+      date: moment(values.date).format("YYYY-MM-DD"),
+      amount: parseFloat(values.amount),
+      tag: values.tag,
+      name: values.name,
+    };
+
+    setTransactions((prev) => [...prev, newTransaction]);
+    setIsExpenseModalVisible(false);
+    setIsIncomeModalVisible(false);
+    addTransaction(newTransaction);
+  };
+
+  async function addTransaction(transaction, many = false) {
+    try {
+      const docRef = await addDoc(
+        collection(db, `users/${user.uid}/transactions`),
+        transaction
+      );
+      console.log("Document written with ID: ", docRef.id);
+      if (!many) toast.success("Transaction Added!");
+    } catch (e) {
+      console.error("Error adding document: ", e);
+      if (!many) toast.error("Couldn't add transaction");
+    }
+  }
+
+  async function fetchTransactions() {
+    setLoading(true);
+    if (user) {
+      try {
+        const q = query(collection(db, `users/${user.uid}/transactions`));
+        const querySnapshot = await getDocs(q);
+        const transactionsArray = [];
+        querySnapshot.forEach((docSnap) => {
+          transactionsArray.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        setTransactions(transactionsArray);
+        toast.success("Transactions Fetched!");
+      } catch (e) {
+        toast.error("Error fetching transactions");
+        console.error(e);
+      }
+    }
+    setLoading(false);
+  }
+
+  async function reset() {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const q = query(collection(db, `users/${user.uid}/transactions`));
+      const querySnapshot = await getDocs(q);
+      for (const docSnap of querySnapshot.docs) {
+        await deleteDoc(doc(db, `users/${user.uid}/transactions`, docSnap.id));
+      }
+      setTransactions([]);
+      setIncome(0);
+      setExpenses(0);
+      setCurrentBalance(0);
+      toast.success("All transactions reset!");
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to reset transactions");
+    }
+    setLoading(false);
+  }
+
+  // ---------------------- Computations ----------------------
+
+  const calculateBalance = () => {
+    let incomeTotal = 0;
+    let expensesTotal = 0;
+
+    transactions.forEach((transaction) => {
+      if (transaction.type === "income") incomeTotal += transaction.amount;
+      else expensesTotal += transaction.amount;
+    });
+
+    setIncome(incomeTotal);
+    setExpenses(expensesTotal);
+    setCurrentBalance(incomeTotal - expensesTotal);
+  };
+
+  useEffect(() => {
+    fetchTransactions();
+  }, []);
+
+  useEffect(() => {
+    calculateBalance();
+  }, [transactions]);
+
+  // ---------------------- Chart Data ----------------------
+
   const processChartData = () => {
     const balanceData = [];
     const spendingData = {};
@@ -60,26 +141,26 @@ const Dashboard = () => {
       const monthYear = moment(transaction.date).format("MMM YYYY");
       const tag = transaction.tag;
 
-      if (transaction.type === "income") {
-        if (balanceData.some((data) => data.month === monthYear)) {
-          balanceData.find((data) => data.month === monthYear).balance +=
-            transaction.amount;
-        } else {
-          balanceData.push({ month: monthYear, balance: transaction.amount });
-        }
+      // balance chart
+      const existingMonth = balanceData.find((d) => d.month === monthYear);
+      if (existingMonth) {
+        existingMonth.balance +=
+          transaction.type === "income"
+            ? transaction.amount
+            : -transaction.amount;
       } else {
-        if (balanceData.some((data) => data.month === monthYear)) {
-          balanceData.find((data) => data.month === monthYear).balance -=
-            transaction.amount;
-        } else {
-          balanceData.push({ month: monthYear, balance: -transaction.amount });
-        }
+        balanceData.push({
+          month: monthYear,
+          balance:
+            transaction.type === "income"
+              ? transaction.amount
+              : -transaction.amount,
+        });
+      }
 
-        if (spendingData[tag]) {
-          spendingData[tag] += transaction.amount;
-        } else {
-          spendingData[tag] = transaction.amount;
-        }
+      // spending pie chart
+      if (transaction.type === "expense") {
+        spendingData[tag] = (spendingData[tag] || 0) + transaction.amount;
       }
     });
 
@@ -91,123 +172,39 @@ const Dashboard = () => {
     return { balanceData, spendingDataArray };
   };
 
-  const { balanceData, spendingDataArray } = processChartData();
-  const showExpenseModal = () => {
-    setIsExpenseModalVisible(true);
-  };
+  const { balanceData, spendingDataArray } = useMemo(
+    () => processChartData(),
+    [transactions]
+  );
 
-  const showIncomeModal = () => {
-    setIsIncomeModalVisible(true);
-  };
+  // ---------------------- Chart Config ----------------------
 
-  const handleExpenseCancel = () => {
-    setIsExpenseModalVisible(false);
-  };
+  const balanceConfig = useMemo(
+    () => ({
+      data: balanceData,
+      xField: "month",
+      yField: "balance",
+      smooth: true,
+      height: 300,
+      color: "#1677ff",
+    }),
+    [balanceData]
+  );
 
-  const handleIncomeCancel = () => {
-    setIsIncomeModalVisible(false);
-  };
+  const spendingConfig = useMemo(
+    () => ({
+      data: spendingDataArray,
+      angleField: "value",
+      colorField: "category",
+      radius: 1,
+      label: { type: "inner", offset: "-30%", content: "{value}" },
+    }),
+    [spendingDataArray]
+  );
 
-  useEffect(() => {
-    fetchTransactions();
-  }, []);
+  // ---------------------- Utility ----------------------
 
-  const onFinish = (values, type) => {
-    const newTransaction = {
-      type: type,
-      date: moment(values.date).format("YYYY-MM-DD"),
-      amount: parseFloat(values.amount),
-      tag: values.tag,
-      name: values.name,
-    };
-
-    setTransactions([...transactions, newTransaction]);
-    setIsExpenseModalVisible(false);
-    setIsIncomeModalVisible(false);
-    addTransaction(newTransaction);
-    calculateBalance();
-  };
-
-  const calculateBalance = () => {
-    let incomeTotal = 0;
-    let expensesTotal = 0;
-
-    transactions.forEach((transaction) => {
-      if (transaction.type === "income") {
-        incomeTotal += transaction.amount;
-      } else {
-        expensesTotal += transaction.amount;
-      }
-    });
-
-    setIncome(incomeTotal);
-    setExpenses(expensesTotal);
-    setCurrentBalance(incomeTotal - expensesTotal);
-  };
-
-  // Calculate the initial balance, income, and expenses
-  useEffect(() => {
-    calculateBalance();
-  }, [transactions]);
-
-  async function addTransaction(transaction, many) {
-    try {
-      const docRef = await addDoc(
-        collection(db, `users/${user.uid}/transactions`),
-        transaction
-      );
-      console.log("Document written with ID: ", docRef.id);
-      if (!many) {
-        toast.success("Transaction Added!");
-      }
-    } catch (e) {
-      console.error("Error adding document: ", e);
-      if (!many) {
-        toast.error("Couldn't add transaction");
-      }
-    }
-  }
-
-  async function fetchTransactions() {
-    setLoading(true);
-    if (user) {
-      const q = query(collection(db, `users/${user.uid}/transactions`));
-      const querySnapshot = await getDocs(q);
-      let transactionsArray = [];
-      querySnapshot.forEach((doc) => {
-        // doc.data() is never undefined for query doc snapshots
-        transactionsArray.push(doc.data());
-      });
-      setTransactions(transactionsArray);
-      toast.success("Transactions Fetched!");
-    }
-    setLoading(false);
-  }
-
-  const balanceConfig = {
-    data: balanceData,
-    xField: "month",
-    yField: "balance",
-  };
-
-  const spendingConfig = {
-    data: spendingDataArray,
-    angleField: "value",
-    colorField: "category",
-  };
-
-  function reset() {
-    console.log("resetting");
-  }
-  const cardStyle = {
-    boxShadow: "0px 0px 30px 8px rgba(227, 227, 227, 0.75)",
-    margin: "2rem",
-    borderRadius: "0.5rem",
-    minWidth: "400px",
-    flex: 1,
-  };
-
-  function exportToCsv() {
+  const exportToCsv = () => {
     const csv = unparse(transactions, {
       fields: ["name", "type", "date", "amount", "tag"],
     });
@@ -219,7 +216,17 @@ const Dashboard = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  }
+  };
+
+  const cardStyle = {
+    boxShadow: "0px 0px 30px 8px rgba(227, 227, 227, 0.75)",
+    margin: "2rem",
+    borderRadius: "0.5rem",
+    minWidth: "400px",
+    flex: 1,
+  };
+
+  // ---------------------- Render ----------------------
 
   return (
     <div className="dashboard-container">
@@ -232,22 +239,23 @@ const Dashboard = () => {
             currentBalance={currentBalance}
             income={income}
             expenses={expenses}
-            showExpenseModal={showExpenseModal}
-            showIncomeModal={showIncomeModal}
+            showExpenseModal={() => setIsExpenseModalVisible(true)}
+            showIncomeModal={() => setIsIncomeModalVisible(true)}
             cardStyle={cardStyle}
             reset={reset}
           />
 
           <AddExpenseModal
             isExpenseModalVisible={isExpenseModalVisible}
-            handleExpenseCancel={handleExpenseCancel}
+            handleExpenseCancel={() => setIsExpenseModalVisible(false)}
             onFinish={onFinish}
           />
           <AddIncomeModal
             isIncomeModalVisible={isIncomeModalVisible}
-            handleIncomeCancel={handleIncomeCancel}
+            handleIncomeCancel={() => setIsIncomeModalVisible(false)}
             onFinish={onFinish}
           />
+
           {transactions.length === 0 ? (
             <NoTransactions />
           ) : (
@@ -255,20 +263,21 @@ const Dashboard = () => {
               <Row gutter={16}>
                 <Card bordered={true} style={cardStyle}>
                   <h2>Financial Statistics</h2>
-                  <Line {...{ ...balanceConfig, data: balanceData }} />
+                  <Line {...balanceConfig} />
                 </Card>
 
                 <Card bordered={true} style={{ ...cardStyle, flex: 0.45 }}>
                   <h2>Total Spending</h2>
-                  {spendingDataArray.length == 0 ? (
-                    <p>Seems like you haven't spent anything till now...</p>
+                  {spendingDataArray.length === 0 ? (
+                    <p>Seems like you haven't spent anything yet...</p>
                   ) : (
-                    <Pie {...{ ...spendingConfig, data: spendingDataArray }} />
+                    <Pie {...spendingConfig} />
                   )}
                 </Card>
               </Row>
             </>
           )}
+
           <TransactionSearch
             transactions={transactions}
             exportToCsv={exportToCsv}
