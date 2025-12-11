@@ -134,6 +134,17 @@ const TransactionSearch = ({
           <Option value="expense">Expense</Option>
         </Select>
       </div>
+
+      {/* <Select
+        style={{ width: 200, marginRight: 10 }}
+        onChange={(value) => setSelectedTag(value)}
+        placeholder="Filter by tag"
+        allowClear
+      >
+        <Option value="food">Food</Option>
+        <Option value="education">Education</Option>
+        <Option value="office">Office</Option>
+      </Select> */}
       <div className="my-table">
         <div
           style={{

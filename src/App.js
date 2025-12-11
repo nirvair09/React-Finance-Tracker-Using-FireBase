@@ -1,16 +1,17 @@
 import "./App.css";
-import {BrowserRouter as Router,Routes,Route } from 'react-router-dom'
-import SignUpSignIn from './components/SignUp-SignIn'
-import DashBoard from './components/DashBoard'
-const App = () => {
+import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
+import SignUpSignIn from "./components/Signup";
+import Dashboard from "./components/DashBoard";
+
+function App() {
   return (
     <Router>
       <Routes>
-        <Route path='/' element={<SignUpSignIn/>}  />
-        <Route path='/dashboard' element={<DashBoard/>} />
+        <Route path="/" element={<SignUpSignIn />} />
+        <Route path="/dashboard" element={<Dashboard />} />
       </Routes>
     </Router>
-  )
+  );
 }
 
-export default App
+export default App;

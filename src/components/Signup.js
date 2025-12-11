@@ -10,30 +10,26 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 import Header from "./Header";
 import { toast } from "react-toastify";
 
-
 const SignUpSignIn = () => {
-  const [name,setName]=useState('');
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [flag,setFlag]=useState(false);
-  
+  const [flag, setFlag] = useState(false);
   const navigate = useNavigate();
 
-  const creatUserDocument = async(user)=>{
+  const createUserDocument = async (user) => {
     setLoading(true);
-    if(!user) return;
+    if (!user) return;
 
-    const userRef = doc(db,"users",user.uid);
+    const userRef = doc(db, "users", user.uid);
     const userData = await getDoc(userRef);
 
-    if(!userData.exists()){
-      const {displayName,email,photoURL}=user;
+    if (!userData.exists()) {
+      const { displayName, email, photoURL } = user;
+      const createdAt = new Date();
 
-      const createdAt=new Date();
-
-      
       try {
         await setDoc(userRef, {
           name: displayName ? displayName : name,
@@ -51,17 +47,18 @@ const SignUpSignIn = () => {
     }
   };
 
-  const signUpWithEmail = async(e)=>{
+  const signUpWithEmail = async (e) => {
     setLoading(true);
     e.preventDefault();
     try {
       const result = await createUserWithEmailAndPassword(
-        auth,email,password
+        auth,
+        email,
+        password
       );
-
-      const user=result.user;
-      await creatUserDocument(user);
-      toast.success("Signed Up Successfully");
+      const user = result.user;
+      await createUserDocument(user);
+      toast.success("Successfully Signed Up!");
       setLoading(false);
       navigate("/dashboard");
     } catch (error) {
@@ -72,17 +69,17 @@ const SignUpSignIn = () => {
       );
       setLoading(false);
     }
-  }
+  };
 
-  const signInWithEmail = async(e)=>{
+  const signInWithEmail = async (e) => {
     setLoading(true);
     e.preventDefault();
     try {
-      const result = await signInWithEmailAndPassword(
-        auth,email,password);
-        const user=result.user;
-        toast.success("Signed In Successfully");
-        setLoading(false);
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      const user = result.user;
+      navigate("/dashboard");
+      toast.success("Logged In Successfully!");
+      setLoading(false);
     } catch (error) {
       toast.error(error.message);
       console.error(
@@ -91,15 +88,15 @@ const SignUpSignIn = () => {
       );
       setLoading(false);
     }
-  }
+  };
 
-  const signInWithGoogle=async()=>{
+  const signInWithGoogle = async () => {
     setLoading(true);
     try {
-      const resutl = await signInWithPopup(auth,provider);
-      const user=resutl.user;
-      await creatUserDocument(user);
-      toast.success("Signed In Successfully");
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      await createUserDocument(user);
+      toast.success("User Authenticated Successfully!");
       setLoading(false);
       navigate("/dashboard");
     } catch (error) {
@@ -107,7 +104,7 @@ const SignUpSignIn = () => {
       toast.error(error.message);
       console.error("Error signing in with Google: ", error.message);
     }
-  }
+  };
 
   return (
     <>
@@ -243,6 +240,6 @@ const SignUpSignIn = () => {
       </div>
     </>
   );
-}
+};
 
-export default SignUpSignIn
+export default SignUpSignIn;

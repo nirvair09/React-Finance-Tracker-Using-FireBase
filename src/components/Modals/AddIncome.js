@@ -1,14 +1,27 @@
 import React from "react";
-import { Modal, Form, Input, DatePicker, Select, Button } from "antd";
+import {
+  Card,
+  Col,
+  Row,
+  Button,
+  Modal,
+  Form,
+  Input,
+  DatePicker,
+  Select,
+} from "antd";
 
-function AddIncome({ isIncomeModalVisible, handleIncomeCancel, onFinish }) {
+function AddIncomeModal({
+  isIncomeModalVisible,
+  handleIncomeCancel,
+  onFinish,
+}) {
   const [form] = Form.useForm();
-
   return (
     <Modal
       style={{ fontWeight: 600 }}
       title="Add Income"
-      open={isIncomeModalVisible} // ✅ use 'open' if AntD v5
+      visible={isIncomeModalVisible}
       onCancel={handleIncomeCancel}
       footer={null}
     >
@@ -16,48 +29,56 @@ function AddIncome({ isIncomeModalVisible, handleIncomeCancel, onFinish }) {
         form={form}
         layout="vertical"
         onFinish={(values) => {
-          console.log("Form submitted"); // Debug check
           onFinish(values, "income");
           form.resetFields();
         }}
       >
         <Form.Item
+          style={{ fontWeight: 600 }}
           label="Name"
           name="name"
-          rules={[{ required: true, message: "Please input the name of the transaction!" }]}
+          rules={[
+            {
+              required: true,
+              message: "Please input the name of the transaction!",
+            },
+          ]}
         >
           <Input type="text" className="custom-input" />
         </Form.Item>
-
         <Form.Item
+          style={{ fontWeight: 600 }}
           label="Amount"
           name="amount"
-          rules={[{ required: true, message: "Please input the amount of the transaction!" }]}
+          rules={[
+            { required: true, message: "Please input the income amount!" },
+          ]}
         >
           <Input type="number" className="custom-input" />
         </Form.Item>
-
         <Form.Item
+          style={{ fontWeight: 600 }}
           label="Date"
           name="date"
-          rules={[{ required: true, message: "Please select the date of the transaction!" }]}
+          rules={[
+            { required: true, message: "Please select the income date!" },
+          ]}
         >
-          <DatePicker className="custom-input" format="YYYY-MM-DD" />
+          <DatePicker format="YYYY-MM-DD" className="custom-input" />
         </Form.Item>
-
         <Form.Item
+          style={{ fontWeight: 600 }}
           label="Tag"
           name="tag"
-          rules={[{ required: true, message: "Please select a tag for the transaction!" }]}
+          rules={[{ required: true, message: "Please select a tag!" }]}
         >
           <Select className="select-input-2">
             <Select.Option value="salary">Salary</Select.Option>
             <Select.Option value="freelance">Freelance</Select.Option>
             <Select.Option value="investment">Investment</Select.Option>
-            <Select.Option value="other">Other</Select.Option>
+            {/* Add more tags here */}
           </Select>
         </Form.Item>
-
         <Form.Item>
           <Button className="btn btn-blue" type="primary" htmlType="submit">
             Add Income
@@ -68,4 +89,4 @@ function AddIncome({ isIncomeModalVisible, handleIncomeCancel, onFinish }) {
   );
 }
 
-export default AddIncome;
+export default AddIncomeModal;
